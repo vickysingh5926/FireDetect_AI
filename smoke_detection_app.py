@@ -5,14 +5,15 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.decomposition import PCA
+from sklearn.naive_bayes import GaussianNB
+from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Load dataset
 df = pd.read_csv('smoke_detection_iot.csv')  # Replace with your dataset path
 
-# Drop the 'Unnamed: 0' column as it's likely just an index
+# Drop the 'Unnamed: 0' column
 df = df.drop(['Unnamed: 0'], axis=1)
 
 # Define CSS for blue theme
@@ -86,45 +87,45 @@ st.write(df.head())
 st.markdown("<h2 class='sub-title'>Correlation Matrix</h2>", unsafe_allow_html=True)
 correlation_matrix = df.corr()
 
-# Visualize the correlation matrix without additional styling
+# Visualize the correlation matrix
 plt.figure(figsize=(12, 8))
 sns.heatmap(correlation_matrix, annot=True)
 st.pyplot(plt)
 
 # Data Preprocessing
-X = df.drop(['Fire Alarm'], axis=1)  # Dependent variables
+X = df.drop(['Fire Alarm'], axis=1)  # Features
 y = df['Fire Alarm']  # Target variable
 
 # Split the dataset (30% for testing)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# PCA Analysis
-pca = PCA(n_components=2)  # Keep 2 components
-X_train_pca = pca.fit_transform(X_train)
-X_test_pca = pca.transform(X_test)
+# Standardize the data for Decision Tree and Random Forest
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-
-
+# Initialize models
+model_dt = DecisionTreeClassifier(
+    max_depth=10,
+    min_samples_split=5,
+    min_samples_leaf=2,
+    ccp_alpha=0.01,
+    random_state=42
+)
+model_rf = RandomForestClassifier(
+    max_depth=20,
+    min_samples_split=10,
+    min_samples_leaf=10,
+    max_features='sqrt',
+    ccp_alpha=0.01,
+    random_state=42
+)
+model_nb = GaussianNB()
 
 # Train models
-model_dt = DecisionTreeClassifier(
-    max_depth=10,              # Increased max depth for better accuracy
-    min_samples_split=5,       # Decreased minimum samples required to split a node
-    min_samples_leaf=2,        # Decreased minimum samples required at each leaf node
-    ccp_alpha=0.01,           # Decreased cost complexity pruning for finer control
-    random_state=42
-)
-model_dt.fit(X_train, y_train)
-
-model_rf = RandomForestClassifier(
-    max_depth=5,               
-    min_samples_split=10,      
-    min_samples_leaf=10,       
-    max_features='sqrt', 
-    ccp_alpha=0.008,       
-    random_state=42
-)
-model_rf.fit(X_train_pca, y_train)
+model_dt.fit(X_train_scaled, y_train)
+model_rf.fit(X_train_scaled, y_train)
+model_nb.fit(X_train, y_train)
 
 # Sidebar for user input
 st.sidebar.header("Input Parameters")
@@ -137,25 +138,28 @@ def user_input_features():
 
 input_df = user_input_features()
 
-# Apply PCA to user input data
-input_df_pca = pca.transform(input_df)
+# Apply scaling to user input data for Decision Tree and Random Forest
+input_df_scaled = scaler.transform(input_df)
 
-# Model selection with a light blue box
+# Model selection
 st.markdown("<div class='model-box'><h1>Choose Your Model</h1></div>", unsafe_allow_html=True)
-model_choice = st.selectbox("Select Model", ("Random Forest", "Decision Tree"))
+model_choice = st.selectbox("Select Model", ("Decision Tree", "Random Forest", "Naive Bayes"))
 
 # Show Prediction
 st.markdown("<h2 class='sub-title'>Prediction</h2>", unsafe_allow_html=True)
 
 if model_choice == "Random Forest":
-    prediction = model_rf.predict(input_df_pca)
-    prediction_proba = model_rf.predict_proba(input_df_pca)
+    prediction = model_rf.predict(input_df_scaled)
+    prediction_proba = model_rf.predict_proba(input_df_scaled)
     st.write("**Using Random Forest**")
-
 elif model_choice == "Decision Tree":
-    prediction = model_dt.predict(input_df)
-    prediction_proba = model_dt.predict_proba(input_df)
+    prediction = model_dt.predict(input_df_scaled)
+    prediction_proba = model_dt.predict_proba(input_df_scaled)
     st.write("**Using Decision Tree**")
+elif model_choice == "Naive Bayes":
+    prediction = model_nb.predict(input_df)
+    prediction_proba = model_nb.predict_proba(input_df)
+    st.write("**Using Naive Bayes**")
 
 # Check if prediction is iterable
 if isinstance(prediction, (list, np.ndarray)):
@@ -174,18 +178,22 @@ st.write(prediction_proba)
 # Show Model Accuracy
 st.markdown("<h2 class='sub-title'>Model Accuracy</h2>", unsafe_allow_html=True)
 if model_choice == "Random Forest":
-    accuracy = accuracy_score(y_test, model_rf.predict(X_test_pca))
+    accuracy = accuracy_score(y_test, model_rf.predict(X_test_scaled))
 elif model_choice == "Decision Tree":
-    accuracy = accuracy_score(y_test, model_dt.predict(X_test))
+    accuracy = accuracy_score(y_test, model_dt.predict(X_test_scaled))
+elif model_choice == "Naive Bayes":
+    accuracy = accuracy_score(y_test, model_nb.predict(X_test))
 
 st.markdown(f"<p class='accuracy-text'>Accuracy: {accuracy * 100:.2f}%</p>", unsafe_allow_html=True)
 
 # Confusion Matrix
 st.markdown("<h2 class='sub-title'>Confusion Matrix</h2>", unsafe_allow_html=True)
 if model_choice == "Random Forest":
-    cm = confusion_matrix(y_test, model_rf.predict(X_test_pca))
+    cm = confusion_matrix(y_test, model_rf.predict(X_test_scaled))
 elif model_choice == "Decision Tree":
-    cm = confusion_matrix(y_test, model_dt.predict(X_test))
+    cm = confusion_matrix(y_test, model_dt.predict(X_test_scaled))
+elif model_choice == "Naive Bayes":
+    cm = confusion_matrix(y_test, model_nb.predict(X_test))
 
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['No Fire', 'Fire'], yticklabels=['No Fire', 'Fire'])
