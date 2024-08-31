@@ -2,107 +2,38 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
-from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Load dataset
 df = pd.read_csv('smoke_detection_iot.csv')  # Replace with your dataset path
 
+# Drop missing values
+df = df.dropna()
+
 # Drop the 'Unnamed: 0' column
 df = df.drop(['Unnamed: 0'], axis=1)
 
-# Define CSS for blue theme
-blue_theme_css = """
-    <style>
-        body {
-            background-color: #e3f2fd;  /* Light Blue Background */
-            color: #0d47a1;  /* Dark Blue Text */
-        }
-        .main-title {
-            font-family: 'Arial Black', sans-serif;
-            color: #0d47a1;  /* Dark Blue */
-            text-align: center;
-            font-size: 36px;
-        }
-        .sub-title {
-            font-family: 'Comic Sans MS', cursive, sans-serif;
-            color: #90caf9;  /* Medium Light Blue */
-            font-size: 24px;
-        }
-        .accuracy-text {
-            font-family: 'Courier New', monospace;
-            font-size: 20px;
-            color: #0d47a1;  /* Dark Blue */
-            background-color: #e3f2fd;  /* Light Blue Background */
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .prediction-text {
-            font-family: 'Verdana', sans-serif;
-            font-size: 20px;
-            color: #e3f2fd;  /* Light Blue Text */
-            background-color: #0d47a1;  /* Dark Blue Background */
-            padding: 10px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .model-box {
-            background-color: #bbdefb;  /* Light Blue Background */
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .selectbox-container {
-            margin-bottom: 20px;
-        }
-        .selectbox-container select {
-            background-color: #bbdefb;  /* Light Blue Background */
-            color: #0d47a1;  /* Dark Blue Text */
-            border: 1px solid #0d47a1;
-            border-radius: 8px;
-            padding: 8px;
-        }
-    </style>
-"""
+# Split dataset based on 'Fire Alarm'
+smoke_detection_0 = df[df['Fire Alarm'] == 0]
+smoke_detection_1 = df[df['Fire Alarm'] == 1]
 
-# Apply the blue theme CSS
-st.markdown(blue_theme_css, unsafe_allow_html=True)
+[x_train_0, x_test_0, x_label_train_0, x_label_test_0] = train_test_split(smoke_detection_0, smoke_detection_0['Fire Alarm'], test_size=0.3, random_state=42, shuffle=True)
+x_train_1_per = len(x_train_0) / len(smoke_detection_1)
+[x_train_1, x_test_1, x_label_train_1, x_label_test_1] = train_test_split(smoke_detection_1, smoke_detection_1['Fire Alarm'], test_size=1 - x_train_1_per, random_state=42, shuffle=True)
 
-# Main title
-st.markdown("<h1 class='main-title'>Smoke Detection System</h1>", unsafe_allow_html=True)
+x_train = pd.concat([x_train_0, x_train_1], axis=0)
+x_test = pd.concat([x_test_0, x_test_1], axis=0)
 
-# Display the dataset in the app
-st.markdown("<h2 class='sub-title'>Dataset Preview</h2>", unsafe_allow_html=True)
-st.write(df.head())
+x_train = x_train.drop(['Fire Alarm'], axis=1)
+x_test = x_test.drop(['Fire Alarm'], axis=1)
 
-# Correlation analysis
-st.markdown("<h2 class='sub-title'>Correlation Matrix</h2>", unsafe_allow_html=True)
-correlation_matrix = df.corr()
-
-# Visualize the correlation matrix
-plt.figure(figsize=(12, 8))
-sns.heatmap(correlation_matrix, annot=True)
-st.pyplot(plt)
-
-# Data Preprocessing
-X = df.drop(['Fire Alarm'], axis=1)  # Features
-y = df['Fire Alarm']  # Target variable
-
-# Split the dataset (30% for testing)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-# Standardize the data for Decision Tree and Random Forest
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+x_train_label = np.array(pd.concat([x_label_train_0, x_label_train_1], axis=0))
+x_test_label = np.array(pd.concat([x_label_test_0, x_label_test_1], axis=0))
 
 # Initialize models
 model_dt = DecisionTreeClassifier(
@@ -123,79 +54,114 @@ model_rf = RandomForestClassifier(
 model_nb = GaussianNB()
 
 # Train models
-model_dt.fit(X_train_scaled, y_train)
-model_rf.fit(X_train_scaled, y_train)
-model_nb.fit(X_train, y_train)
+model_dt.fit(x_train, x_train_label)
+model_rf.fit(x_train, x_train_label)
+model_nb.fit(x_train, x_train_label)
 
 # Sidebar for user input
 st.sidebar.header("Input Parameters")
 
 def user_input_features():
     input_data = {}
-    for feature in X.columns:
-        input_data[feature] = st.sidebar.number_input(f"Input {feature}", value=float(X[feature].mean()))
+    for feature in x_train.columns:
+        input_data[feature] = st.sidebar.number_input(f"Input {feature}", value=float(x_train[feature].mean()))
     return pd.DataFrame(input_data, index=[0])
 
 input_df = user_input_features()
 
-# Apply scaling to user input data for Decision Tree and Random Forest
-input_df_scaled = scaler.transform(input_df)
+
+# Main title
+st.title("FireDetect AI")
 
 # Model selection
-st.markdown("<div class='model-box'><h1>Choose Your Model</h1></div>", unsafe_allow_html=True)
-model_choice = st.selectbox("Select Model", ("Decision Tree", "Random Forest", "Naive Bayes"))
+st.header("Choose Your Model")
+model_choice = st.selectbox("Select Model", ("FireGuard Ensemble", "Decision Tree", "Random Forest", "Naive Bayes"))
 
 # Show Prediction
-st.markdown("<h2 class='sub-title'>Prediction</h2>", unsafe_allow_html=True)
+st.header("Prediction")
 
-if model_choice == "Random Forest":
-    prediction = model_rf.predict(input_df_scaled)
-    prediction_proba = model_rf.predict_proba(input_df_scaled)
+if model_choice == "FireGuard Ensemble":
+    prediction_dt = model_dt.predict(input_df)
+    prediction_rf = model_rf.predict(input_df)
+    prediction_nb = model_nb.predict(input_df)
+    
+    # Majority vote for ensemble
+    prediction = np.round((prediction_dt + prediction_rf + prediction_nb) / 3)
+    prediction_proba = np.mean([model_dt.predict_proba(input_df), model_rf.predict_proba(input_df), model_nb.predict_proba(input_df)], axis=0)
+    st.write("**Using FireGuard Ensemble**")
+elif model_choice == "Random Forest":
+    prediction = model_rf.predict(input_df)
+    prediction_proba = model_rf.predict_proba(input_df)
     st.write("**Using Random Forest**")
 elif model_choice == "Decision Tree":
-    prediction = model_dt.predict(input_df_scaled)
-    prediction_proba = model_dt.predict_proba(input_df_scaled)
+    prediction = model_dt.predict(input_df)
+    prediction_proba = model_dt.predict_proba(input_df)
     st.write("**Using Decision Tree**")
 elif model_choice == "Naive Bayes":
     prediction = model_nb.predict(input_df)
     prediction_proba = model_nb.predict_proba(input_df)
     st.write("**Using Naive Bayes**")
 
-# Check if prediction is iterable
 if isinstance(prediction, (list, np.ndarray)):
     predicted_value = prediction[0]
 else:
     predicted_value = prediction
 
 if predicted_value == 1:
-    st.markdown("<p class='prediction-text'>Fire Alarm should ring!</p>", unsafe_allow_html=True)
+    st.write("Fire Alarm should ring!")
 else:
-    st.markdown("<p class='prediction-text'>No need to ring the Fire Alarm.</p>", unsafe_allow_html=True)
+    st.write("No need to ring the Fire Alarm.")
 
-st.markdown("<h2 class='sub-title'>Prediction Probability</h2>", unsafe_allow_html=True)
+st.header("Prediction Probability")
 st.write(prediction_proba)
 
 # Show Model Accuracy
-st.markdown("<h2 class='sub-title'>Model Accuracy</h2>", unsafe_allow_html=True)
-if model_choice == "Random Forest":
-    accuracy = accuracy_score(y_test, model_rf.predict(X_test_scaled))
+st.header("Model Accuracy")
+if model_choice == "FireGuard Ensemble":
+    accuracy_dt = accuracy_score(x_test_label, model_dt.predict(x_test))
+    accuracy_rf = accuracy_score(x_test_label, model_rf.predict(x_test))
+    accuracy_nb = accuracy_score(x_test_label, model_nb.predict(x_test))
+    accuracy = np.mean([accuracy_dt, accuracy_rf, accuracy_nb])
+elif model_choice == "Random Forest":
+    accuracy = accuracy_score(x_test_label, model_rf.predict(x_test))
 elif model_choice == "Decision Tree":
-    accuracy = accuracy_score(y_test, model_dt.predict(X_test_scaled))
+    accuracy = accuracy_score(x_test_label, model_dt.predict(x_test))
 elif model_choice == "Naive Bayes":
-    accuracy = accuracy_score(y_test, model_nb.predict(X_test))
+    accuracy = accuracy_score(x_test_label, model_nb.predict(x_test))
 
-st.markdown(f"<p class='accuracy-text'>Accuracy: {accuracy * 100:.2f}%</p>", unsafe_allow_html=True)
+st.write(f"Accuracy: {accuracy * 100:.2f}%")
 
-# Confusion Matrix
-st.markdown("<h2 class='sub-title'>Confusion Matrix</h2>", unsafe_allow_html=True)
-if model_choice == "Random Forest":
-    cm = confusion_matrix(y_test, model_rf.predict(X_test_scaled))
-elif model_choice == "Decision Tree":
-    cm = confusion_matrix(y_test, model_dt.predict(X_test_scaled))
-elif model_choice == "Naive Bayes":
-    cm = confusion_matrix(y_test, model_nb.predict(X_test))
+# Feature Importances or Coefficients
+st.header("Feature Importance")
 
-plt.figure(figsize=(8, 6))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['No Fire', 'Fire'], yticklabels=['No Fire', 'Fire'])
-plt.title('Confusion Matrix', fontsize=20, color='#0d47a1')
+if model_choice == "FireGuard Ensemble":
+    importances_dt = model_dt.feature_importances_
+    importances_rf = model_rf.feature_importances_
+    importances_nb = np.abs(np.mean(model_nb.theta_, axis=0))  # Mean absolute value of Naive Bayes feature means
+
+    # Normalize the importances so they can be averaged
+    importances_dt /= np.sum(importances_dt)
+    importances_rf /= np.sum(importances_rf)
+    importances_nb /= np.sum(importances_nb)
+    
+    # Averaging the feature importances
+    importances_avg = (importances_dt + importances_rf + importances_nb) / 3
+    feature_importances = pd.Series(importances_avg, index=x_train.columns)
+else:
+    if model_choice == "Random Forest":
+        feature_importances = pd.Series(model_rf.feature_importances_, index=x_train.columns)
+    elif model_choice == "Decision Tree":
+        feature_importances = pd.Series(model_dt.feature_importances_, index=x_train.columns)
+    elif model_choice == "Naive Bayes":
+        feature_importances = pd.Series(np.abs(np.mean(model_nb.theta_, axis=0)), index=x_train.columns)
+
+# Sort the feature importances in descending order for better visualization
+feature_importances = feature_importances.sort_values(ascending=False)
+
+# Plotting the feature importances
+plt.figure(figsize=(10, 6))
+sns.barplot(x=feature_importances, y=feature_importances.index)
+plt.title("Feature Importances")
+plt.xlabel("Importance")
+plt.ylabel("Features")
 st.pyplot(plt)
