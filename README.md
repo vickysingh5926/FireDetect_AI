@@ -5,7 +5,7 @@
 A Machine Learning-based AI application for detecting smoke using IoT sensor data. This project is deployed on Streamlit to provide an interactive and user-friendly interface.
 
 ## Table of Contents <br/>
-Introduction <br/> Features <br/> Tech Stack <br/> Installation <br/> Usage <br/> Project Structure <br/> Deployment <br/>
+**Introduction <br/> Features <br/> Tech Stack <br/> Installation <br/> Usage <br/> Project Structure <br/> Deployment <br/>**
 
 <hr>
 
